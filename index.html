@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Scam Radar — Drainer Demo (учебный, Sepolia testnet)</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-main: #181a20;
+      --bg-card: #2b313a;
+      --bg-input: #1e2329;
+      --accent: #f0b90b;
+      --accent-hover: #fcd535;
+      --text-main: #eaecef;
+      --text-secondary: #848e9c;
+      --success: #0ecb81;
+      --danger: #f6465d;
+      --border: #474d57;
+      --warn-bg: #3a1519;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg-main); color: var(--text-main); padding-bottom: 88px; min-height: 100vh; }
+
+    .safety-banner {
+      background: var(--danger);
+      color: #fff;
+      text-align: center;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border);
+    }
+    .brand { font-weight: 700; font-size: 15px; }
+    .brand span { color: var(--accent); }
+    .badge { background: var(--danger); color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+    .rpc-status { font-size: 11px; color: var(--text-secondary); }
+    .rpc-status.ok { color: var(--success); }
+    .rpc-status.err { color: var(--danger); }
+
+    .tabs {
+      display: flex; gap: 4px; padding: 10px 12px; overflow-x: auto;
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-btn {
+      flex: 0 0 auto; background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text-secondary); padding: 8px 12px; border-radius: 8px;
+      cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .tab-btn.active { color: #000; background: var(--accent); border-color: var(--accent); }
+
+    .container { padding: 16px; max-width: 640px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 14px;
+    }
+    .card h2 { font-size: 15px; margin-bottom: 8px; }
+    .card p, .muted { font-size: 13px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 10px; }
+    .lesson-box {
+      background: #1a2330; border-left: 3px solid var(--accent);
+      padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 10px 0;
+      font-size: 12px; color: var(--text-main); line-height: 1.45;
+    }
+    .lesson-box strong { color: var(--accent); }
+
+    .form-label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-input, .form-textarea {
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text-main); border-radius: 8px; padding: 10px 12px; font-size: 13px;
+    }
+    .form-textarea { min-height: 90px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .form-input:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+
+    .btn {
+      display: inline-block; background: var(--accent); color: #000; border: none;
+      border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700;
+      cursor: pointer; margin: 4px 4px 4px 0;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); }
+    .btn-danger { background: var(--danger); color: #fff; }
+
+    .warning-box {
+      background: var(--warn-bg); border: 2px solid var(--danger);
+      border-radius: 12px; padding: 16px; margin: 12px 0; white-space: pre-wrap;
+      font-size: 14px; font-weight: 600; color: #ffb4bc; line-height: 1.45;
+    }
+    .warning-box.hidden, .hidden { display: none !important; }
+
+    .console {
+      background: #0d1117; border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap;
+      max-height: 260px; overflow-y: auto; margin-top: 10px; min-height: 80px;
+    }
+
+    .wallet-row {
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; margin-bottom: 10px; font-size: 12px;
+    }
+    .wallet-row .role { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+    .row-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .row-actions a { color: var(--accent); font-size: 12px; }
+
+    .faucet-link {
+      display: block; color: var(--accent); font-size: 13px; margin: 6px 0; text-decoration: none;
+    }
+    .faucet-link:hover { text-decoration: underline; }
+
+    .footer-note {
+      text-align: center; font-size: 11px; color: var(--text-secondary);
+      padding: 16px; line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="safety-banner">
+    Учебный стенд Scam Radar. Тестовая сеть Sepolia. Никогда не вводите реальные ключи / сид-фразы.
+  </div>
+
+  <header class="header">
+    <div class="brand">Scam Radar <span>Drainer Demo</span><span class="badge">TESTNET</span></div>
+    <div id="rpc-status" class="rpc-status">● RPC…</div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab-btn active" data-tab="lesson">① Урок: импорт = кража</button>
+    <button type="button" class="tab-btn" data-tab="scanner">② Сканер (чтение)</button>
+    <button type="button" class="tab-btn" data-tab="sweep">③ Sweep Simulation</button>
+    <button type="button" class="tab-btn" data-tab="manage">④ Управление</button>
+  </nav>
+
+  <main class="container">
+
+    <!-- ========== MODULE A: Lesson Import ========== -->
+    <section id="tab-lesson" class="tab-content active">
+      <div class="card">
+        <h2>Урок: импорт ключа = кража</h2>
+        <p>Lesson: importing a key into a stranger's app is how drainers steal everything.</p>
+        <div class="lesson-box">
+          <strong>Что делает дрейнер:</strong> показывает «красивый кошелёк», просит
+          «импортировать» сид-фразу или приватный ключ, мгновенно подписывает
+          «sweep max» на адрес мошенника.<br><br>
+          <strong>Как защититься:</strong> никогда не вводите сид/ключ в сайты, Mini App,
+          «поддержку». Подключайте dApp через WalletConnect / расширение MetaMask —
+          сайт ключ не видит.
+        </div>
+
+        <label class="form-label" for="fake-import-input">
+          Поле «Импорт кошелька» (учебное). Можно ввести что угодно похожее на ключ/сид —
+          приложение НЕ импортирует и НЕ подпишет этим.
+        </label>
+        <input
+          id="fake-import-input"
+          class="form-input"
+          type="password"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="Сид-фраза или 0x… приватный ключ (НЕ ВВОДИТЕ РЕАЛЬНЫЙ!)"
+        >
+
+        <div id="import-warning" class="warning-box hidden">
+          <div id="import-warning-text"></div>
+        </div>
+
+        <button type="button" id="btn-play-theatre" class="btn btn-secondary">
+          Показать анимацию дрейна без ввода
+        </button>
+
+        <div id="drain-theatre" class="console" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- ========== MODULE B: Scanner (read-only) ========== -->
+    <section id="tab-scanner" class="tab-content">
+      <div class="card">
+        <h2>Сканер балансов (Sepolia, только чтение)</h2>
+        <p>Read-only balance lookup via provider.getBalance. No keys involved.</p>
+        <div class="lesson-box">
+          <strong>Что делает дрейнер:</strong> после кражи ключа сканирует балансы жертвы
+          во всех сетях, чтобы решить, что «подметать».<br><br>
+          <strong>Урок:</strong> публичный адрес и баланс — не секрет. Секрет — ключ.
+          Этот модуль безопасно читает только Sepolia.
+        </div>
+
+        <label class="form-label" for="scanner-targets">Адреса (по одному на строку)</label>
+        <textarea id="scanner-targets" class="form-textarea" placeholder="0x…"></textarea>
+
+        <button type="button" id="btn-scan-fill-demo" class="btn btn-secondary">Подставить демо-адреса</button>
+        <button type="button" id="btn-scan" class="btn">Сканировать Sepolia</button>
+
+        <div id="scanner-console" class="console"></div>
+      </div>
+    </section>
+
+    <!-- ========== MODULE C: Sweep Simulation ========== -->
+    <section id="tab-sweep" class="tab-content">
+      <div class="card">
+        <h2>Sweep Simulation (между демо-кошельками)</h2>
+        <p>Real Sepolia tx: demo-victim → demo-attacker. Keys generated in-app only.</p>
+        <div class="lesson-box">
+          <strong>Что делает дрейнер:</strong> balance − gas → sendTransaction на адрес
+          атакующего, подпись ключом жертвы, broadcast в mainnet.<br><br>
+          <strong>Здесь:</strong> то же по механике, но оба кошелька создало приложение
+          (createRandom), сеть — Sepolia, ETH — тестовый. Ваш ключ не участвует.
+        </div>
+
+        <p class="muted">
+          Сначала пополните кошелёк «жертвы» тестовым ETH на вкладке «Управление»
+          (faucet), затем нажмите кнопку ниже.
+        </p>
+
+        <button type="button" id="btn-sweep" class="btn btn-danger">Запустить Sweep Simulation</button>
+
+        <div id="sweep-tx-wrap" class="hidden" style="margin-top:10px;font-size:13px;">
+          TX: <a id="sweep-tx-link" class="mono" href="#" target="_blank" rel="noopener"></a>
+        </div>
+
+        <div id="sweep-console" class="console"></div>
+      </div>
+    </section>
+
+    <!-- ========== MODULE D: Management ========== -->
+    <section id="tab-manage" class="tab-content">
+      <div class="card">
+        <h2>Управление демо-кошельками</h2>
+        <p>Management panel: generate wallets, faucet links, refresh balances.</p>
+        <div class="lesson-box">
+          Эти ключи созданы в браузере через <strong>ethers.Wallet.createRandom()</strong>
+          и предназначены только для Sepolia. Их можно показывать — это «игрушечные»
+          кошельки. После закрытия вкладки sessionStorage очистится.
+        </div>
+
+        <div class="wallet-row">
+          <div class="role">Жертва (victim) — пополните через faucet</div>
+          <div>Адрес: <span id="victim-address" class="mono"></span></div>
+          <div>PK: <span id="victim-pk" class="mono"></span></div>
+          <div>Баланс: <span id="victim-balance">—</span></div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" data-copy="victim-address">Копировать</button>
+            <a id="victim-link" href="#" target="_blank" rel="noopener">Etherscan</a>
+          </div>
+        </div>
+
+        <div class="wallet-row">
+          <div class="role">Атакующий (attacker) — куда уходит «дрейн»</div>
+          <div>Адрес: <span id="attacker-address" class="mono"></span></div>
+          <div>PK: <span id="attacker-pk" class="mono"></span></div>
+          <div>Баланс: <span id="attacker-balance">—</span></div>
+          <div class="row-actions">
+            <button type="button" class="btn btn-secondary" data-copy="attacker-address">Копировать</button>
+            <a id="attacker-link" href="#" target="_blank" rel="noopener">Etherscan</a>
+          </div>
+        </div>
+
+        <button type="button" id="btn-refresh-balances" class="btn">Обновить балансы</button>
+        <button type="button" id="btn-regen" class="btn btn-secondary">Сгенерировать новую пару</button>
+
+        <h2 style="margin-top:18px;">Sepolia faucet</h2>
+        <p class="muted">
+          Скопируйте адрес жертвы и запросите тестовый ETH:
+          <span id="faucet-hint-addr" class="mono"></span>
+        </p>
+        <div id="faucet-list"></div>
+
+        <div id="manage-console" class="console"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <p class="footer-note">
+    Scam Radar · учебный стенд · только Sepolia · ключи пользователя никогда не подписывают транзакции.<br>
+    Канал: t.me/ScamRadarDaily
+  </p>
+
+  <!-- Модули: порядок важен (config → demo → provider → lesson/scanner/sweep → app) -->
+  <script src="js/config.js"></script>
+  <script src="js/demo-wallets.js"></script>
+  <script src="js/provider.js"></script>
+  <script src="js/lesson-import.js"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/sweep-sim.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
